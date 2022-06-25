@@ -9,7 +9,8 @@ use crossterm::{
 use futures::future::{select, Either};
 use tui::{
     backend::{Backend, CrosstermBackend},
-    widgets::{Block, Borders, Paragraph},
+    layout::{Constraint, Layout},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
     Terminal,
 };
 use zbus::{Connection, Message};
@@ -17,6 +18,7 @@ use zbus::{Connection, Message};
 struct App {
     log: Vec<(Arc<Message>, bool)>,
     bus_names: Vec<String>,
+    selected_bus: Option<i32>,
     exit: bool,
     focus: Focus,
 }
@@ -32,16 +34,20 @@ enum LogEntry {
 
 #[derive(Debug)]
 enum AppEvent {
+    None,
     Raw(Arc<Message>, bool),
     BusNames(Vec<String>),
     MethodCall,
     InvalidMessage,
     MethodResponse,
     DBusError,
+    SelectLastBusName,
+    SelectNextBusName,
 }
 
 enum Action {
     None,
+    Initialize,
     Quit,
     LoadBusNames,
     SelectLastBusName,
@@ -55,19 +61,13 @@ impl Default for App {
             bus_names: Default::default(),
             exit: Default::default(),
             focus: Focus::BusFrame,
+            selected_bus: None,
         }
     }
 }
 
-#[async_std::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    run_ui().await.unwrap();
-
-    Ok(())
-}
-
 async fn run_ui() -> Result<(), Box<dyn Error>> {
-    let mut app = Arc::new(App::default());
+    let mut app = App::default();
 
     enable_raw_mode().unwrap();
 
@@ -79,6 +79,9 @@ async fn run_ui() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend).unwrap();
 
     disable_raw_mode().unwrap();
+
+    let events = to_events(Action::Initialize).await;
+    reduce(events, &mut app);
 
     loop {
         // draw ui -> action -> app event -> state -> redraw
@@ -109,35 +112,50 @@ fn wait_for_user_input(app: &App) -> Action {
             Focus::BusFrame => match key.code {
                 KeyCode::Enter => todo!(),
                 KeyCode::Right => todo!(),
-                KeyCode::Up => todo!(),
-                KeyCode::Down => todo!(),
+                KeyCode::Up => Action::SelectLastBusName,
+                KeyCode::Down => Action::SelectNextBusName,
                 _ => Action::None,
             },
         },
+        Ok(Event::Resize(_, _)) => Action::None,
         _ => Action::None,
     }
 }
 
-fn reduce(events: Vec<AppEvent>, app: &mut Arc<App>) {}
+fn reduce(events: Vec<AppEvent>, app: &mut App) {
+    events
+        .into_iter()
+        .for_each(|event| reduce_event(event, app));
+}
 
-fn reduce_event(e: AppEvent, app: App) -> App {
+fn reduce_event(e: AppEvent, app: &mut App) {
     match e {
         AppEvent::Raw(_, _) => todo!(),
-        AppEvent::BusNames(_) => todo!(),
-        AppEvent::MethodCall => todo!(),
+        AppEvent::BusNames(bus_names) => app.bus_names = bus_names,
+        AppEvent::MethodCall => {}
         AppEvent::InvalidMessage => todo!(),
-        AppEvent::MethodResponse => todo!(),
+        AppEvent::MethodResponse => {}
         AppEvent::DBusError => todo!(),
+        AppEvent::SelectNextBusName => {
+            app.selected_bus = app.selected_bus.map_or(Some(0), |index| Some(index + 1))
+        }
+        AppEvent::SelectLastBusName => todo!(),
+        AppEvent::None => {}
     }
 }
 
 async fn to_events(a: Action) -> Vec<AppEvent> {
     match a {
         Action::LoadBusNames => load_bus_names().await,
-        Action::SelectLastBusName => todo!(),
-        Action::SelectNextBusName => todo!(),
+        Action::SelectLastBusName => vec![AppEvent::SelectLastBusName],
+        Action::SelectNextBusName => vec![AppEvent::SelectNextBusName],
         Action::Quit => todo!(),
         Action::None => vec![],
+        Action::Initialize => {
+            let mut events = load_bus_names().await;
+            events.append(&mut vec![AppEvent::SelectNextBusName]);
+            events
+        }
     }
 }
 
@@ -155,7 +173,8 @@ async fn load_bus_names() -> Vec<AppEvent> {
         .await
         .unwrap();
 
-    vec![ // TODO failing to deserialize body should not hinder the MethodReturn from propagating
+    vec![
+        // TODO failing to deserialize body should not hinder the MethodReturn from propagating
         message_to_app_event(&message),
         AppEvent::BusNames(message.body().unwrap()),
     ]
@@ -171,47 +190,35 @@ fn message_to_app_event(message: &Arc<Message>) -> AppEvent {
     }
 }
 
-fn key_event_to_action(app: &App, input_event: Option<Result<Event, std::io::Error>>) -> Action {
-    match input_event {
-        Some(Ok(event)) => match event {
-            Event::Key(key_event) => match key_event.code {
-                KeyCode::Char('q') => Action::Quit,
-                KeyCode::Esc => Action::Quit,
-                _ => {
-                    todo!()
-                }
-            },
-            Event::Mouse(_) => todo!(),
-            Event::Resize(_, _) => todo!(),
-        },
-        Some(Err(_e)) => todo!(),
-        None => todo!(),
-    }
-}
-
 fn draw_ui<B: Backend>(
     state: &App,
     terminal: &mut Terminal<B>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     terminal.draw(|f| {
-        let size = f.size();
-        let block = Paragraph::new(
-            state
-                .log
-                .iter()
-                .map(|msg| {
-                    if msg.1 {
-                        format!("> {:?}", msg.0)
-                    } else {
-                        format!("< {:?}", msg.0)
-                    }
-                })
-                .collect::<Vec<String>>()
-                .join("\n"),
-        )
-        .block(Block::default().title("Logs").borders(Borders::ALL));
-        f.render_widget(block, size);
+        let rects = Layout::default()
+            .constraints([Constraint::Percentage(50)].as_ref())
+            .split(f.size());
+
+        f.render_widget(draw_bus_names(state), rects[0]);
     })?;
+
+    Ok(())
+}
+
+fn draw_bus_names(state: &App) -> Table {
+    let rows = state.bus_names.iter().map(|bus_name| {
+        let cell = Cell::from(bus_name.as_str());
+        Row::new([cell])
+    });
+
+    Table::new(rows)
+        .block(Block::default().borders(Borders::ALL).title("Bus Names"))
+        .widths(&[Constraint::Percentage(100)])
+}
+
+#[async_std::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    run_ui().await.unwrap();
 
     Ok(())
 }
