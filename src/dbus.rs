@@ -1,9 +1,14 @@
-use std::{sync::Arc, str::FromStr};
+use std::{str::FromStr, sync::Arc};
 
-use zbus::{blocking::{Connection, Proxy}, xml::Node, dbus_proxy, Message, Result};
+use zbus::{
+    blocking::{Connection, Proxy},
+    dbus_proxy,
+    xml::Node,
+    Message, Result,
+};
 use zvariant::ObjectPath;
 
-use crate::AppEvent;
+use crate::app::AppEvent;
 
 #[dbus_proxy(
     interface = "org.freedesktop.DBus",
@@ -23,48 +28,100 @@ trait Introspect {
     fn introspect(&self) -> Result<String>;
 }
 
-struct DBusClient {
-    con: Connection, 
+pub struct DBusClient {
+    con: Connection,
+}
+
+impl Default for DBusClient {
+    fn default() -> Self {
+        Self {
+            con: Connection::session().unwrap(),
+        }
+    }
 }
 
 impl DBusClient {
-    fn new(con: Connection) -> Self {
+    pub fn new(con: Connection) -> Self {
         Self { con }
     }
 
-    fn introspect(&self, path: &str, interface: &str) -> Node {
-        let proxy = Proxy::new(&self.con, "org.freedesktop.DBus.Introspectable", path, interface).unwrap();
-        Node::from_str(proxy.call_method("Introspect", &()).unwrap().body().unwrap()).unwrap()
+    pub fn list_names(&self) -> Vec<String> {
+        let proxy = Proxy::new(
+            &self.con,
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+        )
+        .unwrap();
+
+        proxy.call_method("ListNames", &()).unwrap().body().unwrap()
     }
-}
 
-pub fn load_bus_names() -> Vec<AppEvent> {
-    let con = Connection::session().unwrap();
+    pub fn introspect(&self, service: &str, path: &str) -> Node {
+        let proxy = Proxy::new(
+            &self.con,
+            service,
+            path,
+            "org.freedesktop.DBus.Introspectable",
+        )
+        .unwrap();
 
-    let proxy = FreeDesktopDBusProxyBlocking::new(&con).unwrap();
+        Node::from_str(
+            proxy
+                .call_method("Introspect", &())
+                .unwrap()
+                .body()
+                .unwrap(),
+        )
+        .unwrap()
+    }
 
-    vec![AppEvent::BusNames(proxy.list_names().unwrap())]
-}
+    pub fn call_function<T>(
+        &self,
+        service: &str,
+        path: &str,
+        interface: &str,
+        method: &str,
+        args: &T,
+    ) -> Arc<Message>
+    where
+        T: serde::ser::Serialize + zvariant::DynamicType,
+    {
+        let proxy = Proxy::new(&self.con, service, path, interface).unwrap();
 
-fn message_to_app_event(message: &Arc<Message>) -> AppEvent {
-    match message.message_type() {
-        zbus::MessageType::Invalid => AppEvent::InvalidMessage,
-        zbus::MessageType::MethodCall => AppEvent::MethodCall,
-        zbus::MessageType::MethodReturn => AppEvent::MethodResponse,
-        zbus::MessageType::Error => AppEvent::DBusError,
-        zbus::MessageType::Signal => todo!(),
+        proxy.call_method(method, args).unwrap()
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{load_bus_names};
-
+    use crate::dbus::DBusClient;
 
     #[test]
-    fn test_get_object_path() {
-        let app_event = load_bus_names();
+    fn test_list_names() {
+        let dbus_client = DBusClient::default();
+        assert!(dbus_client.list_names().len() > 1);
+    }
 
-        assert_eq!(app_event.len(), 1);
+    #[test]
+    fn test_instrospect() {
+        let dbus_client = DBusClient::default();
+        assert!(
+            dbus_client
+                .introspect("org.freedesktop.DBus", "/")
+                .nodes()
+                .len()
+                > 0
+        );
+    }
+
+    #[test]
+    fn test_call() {
+        let dbus_client = DBusClient::default();
+        assert!(
+            dbus_client
+                .call_function("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames", &()).body::<Vec<String>>()
+               .is_ok() 
+        );
     }
 }

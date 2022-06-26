@@ -1,4 +1,4 @@
-use crate::{action::Action, dbus::load_bus_names};
+use crate::{action::Action, dbus::DBusClient};
 
 pub struct App {
     pub bus_names: Vec<String>,
@@ -34,13 +34,13 @@ impl Default for App {
 
 pub fn action_to_events(a: Action) -> Vec<AppEvent> {
     match a {
-        Action::LoadBusNames => load_bus_names(),
+        Action::LoadBusNames => vec![AppEvent::BusNames(DBusClient::default().list_names())],
         Action::SelectLastBusName => vec![AppEvent::SelectLastBusName],
         Action::SelectNextBusName => vec![AppEvent::SelectNextBusName],
         Action::Quit => todo!(),
         Action::None => vec![],
         Action::Initialize => {
-            let mut events: Vec<AppEvent> = load_bus_names();
+            let mut events: Vec<AppEvent> = vec![AppEvent::BusNames(DBusClient::default().list_names())];
             events.append(&mut vec![AppEvent::SelectNextBusName]);
             events
         }

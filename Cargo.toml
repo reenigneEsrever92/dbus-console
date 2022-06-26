@@ -12,3 +12,4 @@ zbus = { version = "2.3", features = ["xml"] }
 zvariant = "3.3"
 async-std = { version = "1.11", features = ["attributes", "std"] }
 futures = "*"
+serde = "1.0"
