@@ -6,9 +6,6 @@ use zbus::{
     xml::Node,
     Message, Result,
 };
-use zvariant::ObjectPath;
-
-use crate::app::AppEvent;
 
 #[dbus_proxy(
     interface = "org.freedesktop.DBus",
@@ -118,10 +115,15 @@ mod test {
     #[test]
     fn test_call() {
         let dbus_client = DBusClient::default();
-        assert!(
-            dbus_client
-                .call_function("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "ListNames", &()).body::<Vec<String>>()
-               .is_ok() 
-        );
+        assert!(dbus_client
+            .call_function(
+                "org.freedesktop.DBus",
+                "/org/freedesktop/DBus",
+                "org.freedesktop.DBus",
+                "ListNames",
+                &()
+            )
+            .body::<Vec<String>>()
+            .is_ok());
     }
 }
