@@ -6,6 +6,7 @@ use zbus::{
     xml::Node,
     Message, Result,
 };
+use zvariant::Signature;
 
 #[dbus_proxy(
     interface = "org.freedesktop.DBus",
@@ -63,14 +64,35 @@ impl DBusClient {
         )
         .unwrap();
 
-        Node::from_str(
-            proxy
-                .call_method("Introspect", &())
-                .unwrap()
-                .body()
-                .unwrap(),
-        )
-        .unwrap()
+        Node::from_str(&proxy.introspect().unwrap()).unwrap()
+    }
+
+    pub fn get_signature(
+        &self,
+        service: &str,
+        path: &str,
+        interface: &str,
+        method: &str,
+    ) -> Option<String> {
+        let proxy = Proxy::new(&self.con, service, path, interface).unwrap();
+
+        let node = self.introspect(service, path);
+
+        node.interfaces()
+            .iter()
+            .find(|inf| inf.name() == interface)
+            .and_then(|inf| {
+                inf.methods()
+                    .iter()
+                    .find(|mth| mth.name() == method)
+                    .cloned()
+            })
+            .map(|mth| {
+                mth.args()
+                    .iter()
+                    .map(|arg| arg.ty())
+                    .fold(String::new(), |a, b| a + b)
+            })
     }
 
     pub fn call_function<T>(
@@ -125,5 +147,18 @@ mod test {
             )
             .body::<Vec<String>>()
             .is_ok());
+    }
+
+    #[test]
+    fn test_get_signature() {
+        let dbus_client = DBusClient::default();
+        let result = dbus_client.get_signature(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "ListNames",
+        );
+
+        println!("{:?}", result);
     }
 }
