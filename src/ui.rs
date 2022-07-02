@@ -1,5 +1,9 @@
 use std::error::Error;
 
+use crate::{
+    action::Action,
+    app::{action_to_events, App, Focus},
+};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -7,13 +11,15 @@ use crossterm::{
 };
 use tui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Layout},
+    layout::{
+        Constraint,
+        Direction::{Horizontal, Vertical},
+        Layout,
+    },
     style::{Modifier, Style},
     widgets::{Block, Borders, Cell, Row, Table},
     Terminal,
 };
-use crate::{action::Action, app::{App, Focus, action_to_events}};
-
 
 pub fn run_ui() -> Result<(), Box<dyn Error>> {
     enable_raw_mode().unwrap();
@@ -56,21 +62,47 @@ fn draw_ui<B: Backend>(
     terminal: &mut Terminal<B>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     terminal.draw(|f| {
-        let rects = Layout::default()
+        let root_layout = Layout::default()
+            .direction(Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
             .split(f.size());
 
-        f.render_widget(draw_bus_names(state), rects[0]);
-        f.render_widget(draw_bus_paths(state), rects[1]);
+        let left_pane = Layout::default()
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .split(root_layout[0]);
+
+        let right_pane = Layout::default()
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .split(root_layout[1]);
+
+        f.render_widget(draw_bus_names(state), left_pane[0]);
+        f.render_widget(draw_bus_paths(state), left_pane[1]);
+        f.render_widget(draw_methods(state), right_pane[0]);
     })?;
 
     Ok(())
 }
 
+fn draw_methods(state: &App) -> Table {
+    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+
+    let rows = state.methods.iter().map(|method| {
+        let cell = Cell::from(method.as_str());
+        let row = Row::new([cell]);
+
+        row
+    });
+
+    Table::new(rows)
+        .block(Block::default().borders(Borders::ALL).title("Methods"))
+        .highlight_style(selected_style)
+        .widths(&[Constraint::Percentage(100)])
+}
+
 fn draw_bus_paths(state: &App) -> Table {
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 
-    let rows = state.bus_names.iter().map(|bus_name| {
+    let rows = state.paths.iter().map(|bus_name| {
         let cell = Cell::from(bus_name.as_str());
         let row = Row::new([cell]);
 

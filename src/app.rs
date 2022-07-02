@@ -2,6 +2,8 @@ use crate::{action::Action, dbus::DBusClient};
 
 pub struct App {
     pub bus_names: Vec<String>,
+    pub paths: Vec<String>,
+    pub methods: Vec<String>,
     pub selected_bus: Option<String>,
     pub focus: Focus,
 }
@@ -14,6 +16,8 @@ pub enum Focus {
 pub enum AppEvent {
     None,
     BusNames(Vec<String>),
+    PathsLoaded(Vec<String>),
+    MethodsLoaded(Vec<String>),
     MethodCall,
     InvalidMessage,
     MethodResponse,
@@ -28,30 +32,42 @@ impl Default for App {
             bus_names: Default::default(),
             focus: Focus::BusFrame,
             selected_bus: None,
+            methods: Default::default(),
+            paths: Default::default(),
         }
     }
 }
 
 pub fn action_to_events(a: Action) -> Vec<AppEvent> {
     match a {
-        Action::LoadBusNames => vec![AppEvent::BusNames(DBusClient::default().list_names())],
+        Action::LoadBusNames => {
+            let mut events = vec![AppEvent::BusNames(DBusClient::default().list_names())];
+            events.append(&mut action_to_events(Action::SelectNextBusName));
+            events
+        }
         Action::SelectLastBusName => vec![AppEvent::SelectLastBusName],
         Action::SelectNextBusName => vec![AppEvent::SelectNextBusName],
         Action::Quit => todo!(),
         Action::None => vec![],
-        Action::Initialize => {
-            let mut events: Vec<AppEvent> = vec![AppEvent::BusNames(DBusClient::default().list_names())];
-            events.append(&mut vec![AppEvent::SelectNextBusName]);
+        Action::Initialize => action_to_events(Action::LoadBusNames),
+        Action::LoadPaths(service_name) => {
+            let mut events = vec![AppEvent::PathsLoaded(
+                DBusClient::default().get_paths(&service_name),
+            )];
+            // events.append(& mut action_to_events(Action::Sele))
             events
         }
     }
 }
 
 impl App {
-    pub fn reduce(&mut self, events: Vec<AppEvent>) {
+    pub fn reduce(&mut self, events: Vec<AppEvent>) -> Option<Action> {
         events
             .into_iter()
             .for_each(|event| reduce_event(event, self));
+
+        // TODO return new Actions or would the action_to_events method have to be sufficient
+        None
     }
 }
 
@@ -65,6 +81,8 @@ fn reduce_event(e: AppEvent, app: &mut App) {
         AppEvent::SelectNextBusName => select_next_bus_name(app),
         AppEvent::SelectLastBusName => select_last_bus_name(app),
         AppEvent::None => {}
+        AppEvent::MethodsLoaded(methods) => app.methods = methods,
+        AppEvent::PathsLoaded(paths) => app.paths = paths,
     }
 }
 

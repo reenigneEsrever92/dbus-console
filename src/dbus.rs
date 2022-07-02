@@ -67,6 +67,30 @@ impl DBusClient {
         Node::from_str(&proxy.introspect().unwrap()).unwrap()
     }
 
+    pub fn get_paths(&self, service: &str) -> Vec<String> {
+        self.do_get_paths(service, "/")
+    }
+
+    fn do_get_paths(&self, service: &str, path: &str) -> Vec<String> {
+        self.introspect(service, path)
+            .nodes()
+            .iter()
+            .map(|node| {
+                let mut full_name = String::from(path);
+                full_name.push_str(node.name().unwrap());
+                full_name
+            })
+            .collect()
+    }
+
+    pub fn get_methods(&self, service: &str, path: &str) -> Vec<String> {
+        self.introspect(service, path)
+            .interfaces()
+            .iter()
+            .map(|interface| interface.name().to_string())
+            .collect()
+    }
+
     pub fn get_signature(
         &self,
         service: &str,
@@ -90,6 +114,7 @@ impl DBusClient {
             .map(|mth| {
                 mth.args()
                     .iter()
+                    .filter(|arg| arg.direction() == Some("in"))
                     .map(|arg| arg.ty())
                     .fold(String::new(), |a, b| a + b)
             })
@@ -125,13 +150,20 @@ mod test {
     #[test]
     fn test_instrospect() {
         let dbus_client = DBusClient::default();
-        assert!(
-            dbus_client
-                .introspect("org.freedesktop.DBus", "/")
-                .nodes()
-                .len()
-                > 0
+        let result = dbus_client.introspect(
+            "org.freedesktop.Notifications",
+            "/org/freedesktop/Notifications",
         );
+
+        assert!(result.interfaces().len() > 0);
+    }
+
+    #[test]
+    fn test_get_paths() {
+        let dbus_client = DBusClient::default();
+        let result = dbus_client.get_paths("org.freedesktop.Notifications");
+
+        println!("{:?}", result);
     }
 
     #[test]
@@ -153,12 +185,12 @@ mod test {
     fn test_get_signature() {
         let dbus_client = DBusClient::default();
         let result = dbus_client.get_signature(
-            "org.freedesktop.DBus",
-            "/org/freedesktop/DBus",
-            "org.freedesktop.DBus",
-            "ListNames",
+            "org.freedesktop.Notifications",
+            "/org/freedesktop/Notifications",
+            "org.freedesktop.Notifications",
+            "Notify",
         );
 
-        println!("{:?}", result);
+        assert_eq!(result, Some(String::from("susssasa{sv}i")));
     }
 }
