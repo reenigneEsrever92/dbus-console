@@ -1,10 +1,11 @@
-use crate::{action::Action, dbus::DBusClient};
+use crate::dbus::DBusClient;
 
 pub struct App {
     pub bus_names: Vec<String>,
     pub paths: Vec<String>,
     pub methods: Vec<String>,
     pub selected_bus: Option<String>,
+    pub filter_aliases: bool,
     pub focus: Focus,
 }
 
@@ -12,18 +13,23 @@ pub enum Focus {
     BusFrame,
 }
 
+pub enum Action {
+    None,
+    Initialize,
+    Quit,
+    LoadBusNames,
+    LoadPaths(String),
+    SelectLastBusName,
+    SelectNextBusName,
+}
+
 #[derive(Debug)]
 pub enum AppEvent {
     None,
-    BusNames(Vec<String>),
+    BusNamesLoaded(Vec<String>),
     PathsLoaded(Vec<String>),
     MethodsLoaded(Vec<String>),
-    MethodCall,
-    InvalidMessage,
-    MethodResponse,
-    DBusError,
-    SelectLastBusName,
-    SelectNextBusName,
+    SelectedBusName(String),
 }
 
 impl Default for App {
@@ -34,76 +40,102 @@ impl Default for App {
             selected_bus: None,
             methods: Default::default(),
             paths: Default::default(),
+            filter_aliases: true,
         }
     }
 }
 
-pub fn action_to_events(a: Action) -> Vec<AppEvent> {
+pub fn action_to_events(a: Action, app: &App) -> AppEvent {
     match a {
-        Action::LoadBusNames => {
-            let mut events = vec![AppEvent::BusNames(DBusClient::default().list_names())];
-            events.append(&mut action_to_events(Action::SelectNextBusName));
-            events
-        }
-        Action::SelectLastBusName => vec![AppEvent::SelectLastBusName],
-        Action::SelectNextBusName => vec![AppEvent::SelectNextBusName],
+        Action::LoadBusNames => AppEvent::BusNamesLoaded(DBusClient::default().list_names()),
         Action::Quit => todo!(),
-        Action::None => vec![],
-        Action::Initialize => action_to_events(Action::LoadBusNames),
+        Action::Initialize => action_to_events(Action::LoadBusNames, app),
         Action::LoadPaths(service_name) => {
-            let mut events = vec![AppEvent::PathsLoaded(
-                DBusClient::default().get_paths(&service_name),
-            )];
-            // events.append(& mut action_to_events(Action::Sele))
-            events
+            AppEvent::PathsLoaded(DBusClient::default().get_paths(&service_name))
         }
+        Action::SelectLastBusName => select_last_bus_name(app),
+        Action::SelectNextBusName => select_next_bus_name(app),
+        Action::None => AppEvent::None,
+    }
+}
+
+fn select_next_bus_name(app: &App) -> AppEvent {
+    match app.selected_bus.as_ref() {
+        Some(bus_name) => {
+            // find bus name in buses
+            match app.bus_names.iter().position(|bus| &bus == &bus_name) {
+                Some(index) => {
+                    if index < app.bus_names.len() - 1 {
+                        match app.bus_names.get(index + 1) {
+                            Some(name) => AppEvent::SelectedBusName(String::from(name)),
+                            None => AppEvent::None,
+                        }
+                    } else {
+                        AppEvent::None
+                    }
+                }
+                None => AppEvent::None,
+            }
+        }
+        None => match app.bus_names.get(0) {
+            Some(name) => AppEvent::SelectedBusName(String::from(name)),
+            None => AppEvent::None,
+        },
+    }
+}
+
+fn select_last_bus_name(app: &App) -> AppEvent {
+    match app.selected_bus.as_ref() {
+        Some(bus_name) => {
+            // find bus name in buses
+            match app.bus_names.iter().position(|bus| &bus == &bus_name) {
+                Some(index) => {
+                    if index > 0 {
+                        match app.bus_names.get(index - 1) {
+                            Some(name) => AppEvent::SelectedBusName(String::from(name)),
+                            None => AppEvent::None,
+                        }
+                    } else {
+                        AppEvent::None
+                    }
+                }
+                None => AppEvent::None,
+            }
+        }
+        None => match app.bus_names.get(0) {
+            Some(name) => AppEvent::SelectedBusName(String::from(name)),
+            None => AppEvent::None,
+        },
     }
 }
 
 impl App {
-    pub fn reduce(&mut self, events: Vec<AppEvent>) -> Option<Action> {
-        events
-            .into_iter()
-            .for_each(|event| reduce_event(event, self));
-
-        // TODO return new Actions or would the action_to_events method have to be sufficient
-        None
+    pub fn reduce(&mut self, action: Action) {
+        match reduce_event(action_to_events(action, self), self) {
+            Some(event) => self.reduce(event),
+            None => {}
+        }
     }
 }
 
-fn reduce_event(e: AppEvent, app: &mut App) {
+fn reduce_event(e: AppEvent, app: &mut App) -> Option<Action> {
     match e {
-        AppEvent::BusNames(bus_names) => app.bus_names = bus_names,
-        AppEvent::MethodCall => {}
-        AppEvent::InvalidMessage => todo!(),
-        AppEvent::MethodResponse => {}
-        AppEvent::DBusError => todo!(),
-        AppEvent::SelectNextBusName => select_next_bus_name(app),
-        AppEvent::SelectLastBusName => select_last_bus_name(app),
-        AppEvent::None => {}
-        AppEvent::MethodsLoaded(methods) => app.methods = methods,
-        AppEvent::PathsLoaded(paths) => app.paths = paths,
+        AppEvent::BusNamesLoaded(bus_names) => {
+            app.bus_names = bus_names;
+            None
+        }
+        AppEvent::None => None,
+        AppEvent::MethodsLoaded(methods) => {
+            app.methods = methods;
+            None
+        }
+        AppEvent::PathsLoaded(paths) => {
+            app.paths = paths;
+            None
+        }
+        AppEvent::SelectedBusName(bus_name) => {
+            app.selected_bus = Some(bus_name.clone());
+            Some(Action::LoadPaths(bus_name))
+        }
     }
-}
-
-fn select_next_bus_name(app: &mut App) {
-    let selected_index = app.selected_bus.as_ref().map_or(0, |selected_bus| {
-        app.bus_names
-            .iter()
-            .position(|bus_name| bus_name == selected_bus)
-            .unwrap_or(0)
-    });
-
-    app.selected_bus = app.bus_names.get(selected_index + 1).cloned()
-}
-
-fn select_last_bus_name(app: &mut App) {
-    let selected_index = app.selected_bus.as_ref().map_or(0, |selected_bus| {
-        app.bus_names
-            .iter()
-            .position(|bus_name| bus_name == selected_bus)
-            .unwrap_or(0)
-    });
-
-    app.selected_bus = app.bus_names.get(selected_index - 1).cloned()
 }

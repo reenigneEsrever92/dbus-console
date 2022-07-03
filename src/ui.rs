@@ -1,14 +1,12 @@
 use std::error::Error;
 
-use crate::{
-    action::Action,
-    app::{action_to_events, App, Focus},
-};
+use crate::app::{action_to_events, Action, App, Focus};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use regex::Regex;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{
@@ -29,8 +27,7 @@ pub fn run_ui() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend).unwrap();
 
     let mut app = App::default();
-    let events = action_to_events(Action::Initialize);
-    app.reduce(events);
+    app.reduce(Action::LoadBusNames);
 
     loop {
         // draw ui -> action -> app event -> state -> redraw
@@ -39,8 +36,7 @@ pub fn run_ui() -> Result<(), Box<dyn Error>> {
         if let Action::Quit = action {
             break;
         }
-        let events = action_to_events(action);
-        app.reduce(events);
+        app.reduce(action);
     }
 
     // restore terminal
@@ -125,21 +121,26 @@ fn draw_bus_paths(state: &App) -> Table {
 
 fn draw_bus_names(state: &App) -> Table {
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+    let regex = Regex::new(r":\d.\d").unwrap();
 
-    let rows = state.bus_names.iter().map(|bus_name| {
-        let cell = Cell::from(bus_name.as_str());
-        let row = Row::new([cell]);
+    let rows = state
+        .bus_names
+        .iter()
+        .filter(|bus_name| state.filter_aliases && !regex.is_match(bus_name))
+        .map(|bus_name| {
+            let cell = Cell::from(bus_name.as_str());
+            let row = Row::new([cell]);
 
-        if let Some(selected_bus) = &state.selected_bus {
-            if selected_bus == bus_name {
-                row.style(selected_style)
+            if let Some(selected_bus) = &state.selected_bus {
+                if selected_bus == bus_name {
+                    row.style(selected_style)
+                } else {
+                    row
+                }
             } else {
                 row
             }
-        } else {
-            row
-        }
-    });
+        });
 
     Table::new(rows)
         .block(Block::default().borders(Borders::ALL).title("Bus Names"))
