@@ -6,7 +6,6 @@ use zbus::{
     xml::Node,
     Message, Result,
 };
-use zvariant::Signature;
 
 #[dbus_proxy(
     interface = "org.freedesktop.DBus",
