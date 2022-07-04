@@ -1,6 +1,9 @@
-use std::error::Error;
+use std::{error::Error, ops::Deref};
 
-use crate::app::{action_to_events, Action, App, Focus};
+use crate::{
+    app::{action_to_events, Action, App, Focus},
+    filter::filter_bus_names,
+};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
@@ -121,26 +124,21 @@ fn draw_bus_paths(state: &App) -> Table {
 
 fn draw_bus_names(state: &App) -> Table {
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let regex = Regex::new(r":\d.\d").unwrap();
 
-    let rows = state
-        .bus_names
-        .iter()
-        .filter(|bus_name| state.filter_aliases && !regex.is_match(bus_name))
-        .map(|bus_name| {
-            let cell = Cell::from(bus_name.as_str());
-            let row = Row::new([cell]);
+    let rows = filter_bus_names(state).into_iter().map(|bus_name| {
+        let cell = Cell::from(bus_name.as_str());
+        let row = Row::new([cell]);
 
-            if let Some(selected_bus) = &state.selected_bus {
-                if selected_bus == bus_name {
-                    row.style(selected_style)
-                } else {
-                    row
-                }
+        if let Some(selected_bus) = &state.selected_bus {
+            if selected_bus == bus_name {
+                row.style(selected_style)
             } else {
                 row
             }
-        });
+        } else {
+            row
+        }
+    });
 
     Table::new(rows)
         .block(Block::default().borders(Borders::ALL).title("Bus Names"))

@@ -1,4 +1,4 @@
-use crate::dbus::DBusClient;
+use crate::{dbus::DBusClient, filter::filter_bus_names};
 
 pub struct App {
     pub bus_names: Vec<String>,
@@ -60,20 +60,16 @@ pub fn action_to_events(a: Action, app: &App) -> AppEvent {
 }
 
 fn select_next_bus_name(app: &App) -> AppEvent {
+    let mut bus_names = filter_bus_names(app);
+
     match app.selected_bus.as_ref() {
         Some(bus_name) => {
             // find bus name in buses
-            match app.bus_names.iter().position(|bus| &bus == &bus_name) {
-                Some(index) => {
-                    if index < app.bus_names.len() - 1 {
-                        match app.bus_names.get(index + 1) {
-                            Some(name) => AppEvent::SelectedBusName(String::from(name)),
-                            None => AppEvent::None,
-                        }
-                    } else {
-                        AppEvent::None
-                    }
-                }
+            match bus_names.position(|bus| &bus == &bus_name) {
+                Some(index) => match bus_names.next() {
+                    Some(name) => AppEvent::SelectedBusName(String::from(name)),
+                    None => AppEvent::None,
+                },
                 None => AppEvent::None,
             }
         }
@@ -85,20 +81,16 @@ fn select_next_bus_name(app: &App) -> AppEvent {
 }
 
 fn select_last_bus_name(app: &App) -> AppEvent {
+    let mut bus_names = filter_bus_names(app).rev();
+
     match app.selected_bus.as_ref() {
         Some(bus_name) => {
             // find bus name in buses
-            match app.bus_names.iter().position(|bus| &bus == &bus_name) {
-                Some(index) => {
-                    if index > 0 {
-                        match app.bus_names.get(index - 1) {
-                            Some(name) => AppEvent::SelectedBusName(String::from(name)),
-                            None => AppEvent::None,
-                        }
-                    } else {
-                        AppEvent::None
-                    }
-                }
+            match bus_names.position(|bus| &bus == &bus_name) {
+                Some(index) => match bus_names.next() {
+                    Some(name) => AppEvent::SelectedBusName(String::from(name)),
+                    None => AppEvent::None,
+                },
                 None => AppEvent::None,
             }
         }
