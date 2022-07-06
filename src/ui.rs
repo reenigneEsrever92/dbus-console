@@ -18,9 +18,13 @@ use tui::{
         Layout,
     },
     style::{Modifier, Style},
-    widgets::{Block, Borders, Cell, Row, Table},
+    widgets::{Block, Borders, Cell, List, ListItem, ListState, Row, Table},
     Terminal,
 };
+
+struct GuiState {
+    bus_name_state: ListState,
+}
 
 pub fn run_ui() -> Result<(), Box<dyn Error>> {
     enable_raw_mode().unwrap();
@@ -82,6 +86,30 @@ fn draw_ui<B: Backend>(
     Ok(())
 }
 
+fn draw_bus_names(state: &App) -> List {
+    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+
+    let rows: Vec<ListItem> = filter_bus_names(state)
+        .into_iter()
+        .map(|bus_name| {
+            let list_entry = ListItem::new(bus_name.as_str());
+            if let Some(selected_bus) = &state.bus_name_state.selected {
+                if selected_bus == bus_name {
+                    list_entry.style(selected_style)
+                } else {
+                    list_entry
+                }
+            } else {
+                list_entry
+            }
+        })
+        .collect();
+
+    List::new(rows)
+        .block(Block::default().borders(Borders::ALL).title("Bus Names"))
+        .highlight_style(selected_style)
+}
+
 fn draw_methods(state: &App) -> Table {
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
 
@@ -105,7 +133,7 @@ fn draw_bus_paths(state: &App) -> Table {
         let cell = Cell::from(bus_name.as_str());
         let row = Row::new([cell]);
 
-        if let Some(selected_bus) = &state.selected_bus {
+        if let Some(selected_bus) = &state.bus_name_state.selected {
             if selected_bus == bus_name {
                 row.style(selected_style)
             } else {
@@ -118,30 +146,6 @@ fn draw_bus_paths(state: &App) -> Table {
 
     Table::new(rows)
         .block(Block::default().borders(Borders::ALL).title("Paths"))
-        .highlight_style(selected_style)
-        .widths(&[Constraint::Percentage(100)])
-}
-
-fn draw_bus_names(state: &App) -> Table {
-    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-
-    let rows = filter_bus_names(state).into_iter().map(|bus_name| {
-        let cell = Cell::from(bus_name.as_str());
-        let row = Row::new([cell]);
-
-        if let Some(selected_bus) = &state.selected_bus {
-            if selected_bus == bus_name {
-                row.style(selected_style)
-            } else {
-                row
-            }
-        } else {
-            row
-        }
-    });
-
-    Table::new(rows)
-        .block(Block::default().borders(Borders::ALL).title("Bus Names"))
         .highlight_style(selected_style)
         .widths(&[Constraint::Percentage(100)])
 }

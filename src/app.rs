@@ -1,12 +1,29 @@
 use crate::{dbus::DBusClient, filter::filter_bus_names};
 
 pub struct App {
-    pub bus_names: Vec<String>,
+    pub bus_name_state: ListState,
     pub paths: Vec<String>,
     pub methods: Vec<String>,
-    pub selected_bus: Option<String>,
     pub filter_aliases: bool,
     pub focus: Focus,
+}
+
+#[derive(Default)]
+pub struct ListState {
+    pub entries: Vec<String>,
+    pub direction: Direction,
+    pub selected: Option<String>,
+}
+
+pub enum Direction {
+    UP,
+    DOWN,
+}
+
+impl Default for Direction {
+    fn default() -> Self {
+        Self::DOWN
+    }
 }
 
 pub enum Focus {
@@ -15,7 +32,6 @@ pub enum Focus {
 
 pub enum Action {
     None,
-    Initialize,
     Quit,
     LoadBusNames,
     LoadPaths(String),
@@ -35,12 +51,11 @@ pub enum AppEvent {
 impl Default for App {
     fn default() -> Self {
         Self {
-            bus_names: Default::default(),
             focus: Focus::BusFrame,
-            selected_bus: None,
             methods: Default::default(),
             paths: Default::default(),
             filter_aliases: true,
+            bus_name_state: ListState::default(),
         }
     }
 }
@@ -49,7 +64,6 @@ pub fn action_to_events(a: Action, app: &App) -> AppEvent {
     match a {
         Action::LoadBusNames => AppEvent::BusNamesLoaded(DBusClient::default().list_names()),
         Action::Quit => todo!(),
-        Action::Initialize => action_to_events(Action::LoadBusNames, app),
         Action::LoadPaths(service_name) => {
             AppEvent::PathsLoaded(DBusClient::default().get_paths(&service_name))
         }
@@ -62,18 +76,18 @@ pub fn action_to_events(a: Action, app: &App) -> AppEvent {
 fn select_next_bus_name(app: &App) -> AppEvent {
     let mut bus_names = filter_bus_names(app);
 
-    match app.selected_bus.as_ref() {
+    match app.bus_name_state.selected.as_ref() {
         Some(bus_name) => {
             // find bus name in buses
             match bus_names.position(|bus| &bus == &bus_name) {
-                Some(index) => match bus_names.next() {
+                Some(_) => match bus_names.next() {
                     Some(name) => AppEvent::SelectedBusName(String::from(name)),
                     None => AppEvent::None,
                 },
                 None => AppEvent::None,
             }
         }
-        None => match app.bus_names.get(0) {
+        None => match app.bus_name_state.entries.get(0) {
             Some(name) => AppEvent::SelectedBusName(String::from(name)),
             None => AppEvent::None,
         },
@@ -83,18 +97,18 @@ fn select_next_bus_name(app: &App) -> AppEvent {
 fn select_last_bus_name(app: &App) -> AppEvent {
     let mut bus_names = filter_bus_names(app).rev();
 
-    match app.selected_bus.as_ref() {
+    match app.bus_name_state.selected.as_ref() {
         Some(bus_name) => {
             // find bus name in buses
             match bus_names.position(|bus| &bus == &bus_name) {
-                Some(index) => match bus_names.next() {
+                Some(_) => match bus_names.next() {
                     Some(name) => AppEvent::SelectedBusName(String::from(name)),
                     None => AppEvent::None,
                 },
                 None => AppEvent::None,
             }
         }
-        None => match app.bus_names.get(0) {
+        None => match app.bus_name_state.entries.get(0) {
             Some(name) => AppEvent::SelectedBusName(String::from(name)),
             None => AppEvent::None,
         },
@@ -113,7 +127,7 @@ impl App {
 fn reduce_event(e: AppEvent, app: &mut App) -> Option<Action> {
     match e {
         AppEvent::BusNamesLoaded(bus_names) => {
-            app.bus_names = bus_names;
+            app.bus_name_state.entries = bus_names;
             None
         }
         AppEvent::None => None,
@@ -126,7 +140,7 @@ fn reduce_event(e: AppEvent, app: &mut App) -> Option<Action> {
             None
         }
         AppEvent::SelectedBusName(bus_name) => {
-            app.selected_bus = Some(bus_name.clone());
+            app.bus_name_state.selected = Some(bus_name.clone());
             Some(Action::LoadPaths(bus_name))
         }
     }
