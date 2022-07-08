@@ -22,6 +22,7 @@ use tui::{
     Terminal,
 };
 
+#[derive(Default)]
 struct GuiState {
     bus_name_state: ListState,
 }
@@ -34,6 +35,7 @@ pub fn run_ui() -> Result<(), Box<dyn Error>> {
     let mut terminal = Terminal::new(backend).unwrap();
 
     let mut app = App::default();
+    let mut gui_state = GuiState::default();
     app.reduce(Action::LoadBusNames);
 
     loop {
@@ -62,6 +64,7 @@ pub fn run_ui() -> Result<(), Box<dyn Error>> {
 
 fn draw_ui<B: Backend>(
     state: &App,
+    // gui_state: &mut GuiState,
     terminal: &mut Terminal<B>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     terminal.draw(|f| {
@@ -78,7 +81,11 @@ fn draw_ui<B: Backend>(
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
             .split(root_layout[1]);
 
-        f.render_widget(draw_bus_names(state), left_pane[0]);
+        f.render_widget(
+            draw_bus_names(state),
+            left_pane[0],
+            // &mut gui_state.bus_name_state,
+        );
         f.render_widget(draw_bus_paths(state), left_pane[1]);
         f.render_widget(draw_methods(state), right_pane[0]);
     })?;
@@ -91,6 +98,7 @@ fn draw_bus_names(state: &App) -> List {
 
     let rows: Vec<ListItem> = filter_bus_names(state)
         .into_iter()
+        .skip(state.bus_name_state.skip)
         .map(|bus_name| {
             let list_entry = ListItem::new(bus_name.as_str());
             if let Some(selected_bus) = &state.bus_name_state.selected {
@@ -102,6 +110,7 @@ fn draw_bus_names(state: &App) -> List {
             } else {
                 list_entry
             }
+            // list_entry
         })
         .collect();
 

@@ -1,3 +1,5 @@
+use std::usize;
+
 use crate::{dbus::DBusClient, filter::filter_bus_names};
 
 pub struct App {
@@ -13,6 +15,7 @@ pub struct ListState {
     pub entries: Vec<String>,
     pub direction: Direction,
     pub selected: Option<String>,
+    pub skip: usize,
 }
 
 pub enum Direction {
@@ -45,7 +48,7 @@ pub enum AppEvent {
     BusNamesLoaded(Vec<String>),
     PathsLoaded(Vec<String>),
     MethodsLoaded(Vec<String>),
-    SelectedBusName(String),
+    SelectNextBusName,
 }
 
 impl Default for App {
