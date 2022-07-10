@@ -1,6 +1,6 @@
 use std::usize;
 
-use crate::{dbus::DBusClient, filter::filter_bus_names};
+use crate::{dbus::DBusClient, error::DBusConsoleError, filter::filter_bus_names};
 
 pub struct App {
     pub bus_name_state: ListState,
@@ -44,6 +44,7 @@ pub enum Action {
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     None,
+    Error(DBusConsoleError),
     BusNamesLoaded(Vec<String>),
     PathsLoaded(Vec<String>),
     MethodsLoaded(Vec<String>),
@@ -61,20 +62,6 @@ impl Default for App {
             bus_name_state: ListState::default(),
             log: Vec::new(),
         }
-    }
-}
-
-pub fn action_to_events(a: Action) -> AppEvent {
-    match a {
-        Action::LoadBusNames => AppEvent::BusNamesLoaded(DBusClient::default().list_names()),
-        Action::Quit => todo!(),
-        Action::LoadPaths { bus_name } => {
-            AppEvent::PathsLoaded(DBusClient::default().get_paths(&bus_name))
-        }
-        Action::SelectLastBusName => AppEvent::SelectPreviousBusName,
-        Action::SelectNextBusName => AppEvent::SelectNextBusName,
-        Action::None => AppEvent::None,
-        Action::Resize { section, rows } => todo!(),
     }
 }
 
@@ -97,6 +84,20 @@ impl App {
     }
 }
 
+pub fn action_to_events(a: Action) -> AppEvent {
+    match a {
+        Action::LoadBusNames => AppEvent::BusNamesLoaded(DBusClient::default().list_names()),
+        Action::Quit => todo!(),
+        Action::LoadPaths { bus_name } => {
+            AppEvent::PathsLoaded(DBusClient::default().get_paths(&bus_name).unwrap())
+        }
+        Action::SelectLastBusName => AppEvent::SelectPreviousBusName,
+        Action::SelectNextBusName => AppEvent::SelectNextBusName,
+        Action::None => AppEvent::None,
+        Action::Resize { section, rows } => todo!(),
+    }
+}
+
 fn reduce_event(app: &mut App, e: AppEvent) -> Action {
     app.log.push(LogEntry::AppEventEntry(e.to_owned()));
     match e {
@@ -115,6 +116,7 @@ fn reduce_event(app: &mut App, e: AppEvent) -> Action {
         }
         AppEvent::SelectNextBusName => select_next_bus_name(app),
         AppEvent::SelectPreviousBusName => select_last_bus_name(app),
+        AppEvent::Error(_) => Action::None,
     }
 }
 

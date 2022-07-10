@@ -2,28 +2,11 @@ use std::{str::FromStr, sync::Arc};
 
 use zbus::{
     blocking::{Connection, Proxy},
-    dbus_proxy,
     xml::Node,
-    Message, Result,
+    Message,
 };
 
-#[dbus_proxy(
-    interface = "org.freedesktop.DBus",
-    default_service = "org.freedesktop.DBus",
-    default_path = "/org/freedesktop/DBus"
-)]
-trait FreeDesktopDBus {
-    fn list_names(&self) -> Result<Vec<String>>;
-}
-
-#[dbus_proxy(
-    interface = "org.freedesktop.DBus.Introspectable",
-    default_service = "org.freedesktop.DBus",
-    default_path = "/"
-)]
-trait Introspect {
-    fn introspect(&self) -> Result<String>;
-}
+use crate::error::DBusConsoleResult;
 
 pub struct DBusClient {
     con: Connection,
@@ -54,7 +37,7 @@ impl DBusClient {
         proxy.call_method("ListNames", &()).unwrap().body().unwrap()
     }
 
-    pub fn introspect(&self, service: &str, path: &str) -> Node {
+    pub fn introspect(&self, service: &str, path: &str) -> DBusConsoleResult<Node> {
         let proxy = Proxy::new(
             &self.con,
             service,
@@ -63,15 +46,16 @@ impl DBusClient {
         )
         .unwrap();
 
-        Node::from_str(&proxy.introspect().unwrap()).unwrap()
+        Ok(Node::from_str(&proxy.introspect()?)?)
     }
 
-    pub fn get_paths(&self, service: &str) -> Vec<String> {
+    pub fn get_paths(&self, service: &str) -> DBusConsoleResult<Vec<String>> {
         self.do_get_paths(service, "/")
     }
 
-    fn do_get_paths(&self, service: &str, path: &str) -> Vec<String> {
-        self.introspect(service, path)
+    fn do_get_paths(&self, service: &str, path: &str) -> DBusConsoleResult<Vec<String>> {
+        Ok(self
+            .introspect(service, path)?
             .nodes()
             .iter()
             .map(|node| {
@@ -79,15 +63,16 @@ impl DBusClient {
                 full_name.push_str(node.name().unwrap());
                 full_name
             })
-            .collect()
+            .collect())
     }
 
-    pub fn get_methods(&self, service: &str, path: &str) -> Vec<String> {
-        self.introspect(service, path)
+    pub fn get_methods(&self, service: &str, path: &str) -> DBusConsoleResult<Vec<String>> {
+        Ok(self
+            .introspect(service, path)?
             .interfaces()
             .iter()
             .map(|interface| interface.name().to_string())
-            .collect()
+            .collect())
     }
 
     pub fn get_signature(
@@ -96,12 +81,11 @@ impl DBusClient {
         path: &str,
         interface: &str,
         method: &str,
-    ) -> Option<String> {
-        let proxy = Proxy::new(&self.con, service, path, interface).unwrap();
+    ) -> DBusConsoleResult<Option<String>> {
+        let node = self.introspect(service, path)?;
 
-        let node = self.introspect(service, path);
-
-        node.interfaces()
+        Ok(node
+            .interfaces()
             .iter()
             .find(|inf| inf.name() == interface)
             .and_then(|inf| {
@@ -116,7 +100,7 @@ impl DBusClient {
                     .filter(|arg| arg.direction() == Some("in"))
                     .map(|arg| arg.ty())
                     .fold(String::new(), |a, b| a + b)
-            })
+            }))
     }
 
     pub fn call_function<T>(
@@ -149,10 +133,12 @@ mod test {
     #[test]
     fn test_instrospect() {
         let dbus_client = DBusClient::default();
-        let result = dbus_client.introspect(
-            "org.freedesktop.Notifications",
-            "/org/freedesktop/Notifications",
-        );
+        let result = dbus_client
+            .introspect(
+                "org.freedesktop.Notifications",
+                "/org/freedesktop/Notifications",
+            )
+            .unwrap();
 
         assert!(result.interfaces().len() > 0);
     }
@@ -161,8 +147,6 @@ mod test {
     fn test_get_paths() {
         let dbus_client = DBusClient::default();
         let result = dbus_client.get_paths("org.freedesktop.Notifications");
-
-        println!("{:?}", result);
     }
 
     #[test]
@@ -183,12 +167,14 @@ mod test {
     #[test]
     fn test_get_signature() {
         let dbus_client = DBusClient::default();
-        let result = dbus_client.get_signature(
-            "org.freedesktop.Notifications",
-            "/org/freedesktop/Notifications",
-            "org.freedesktop.Notifications",
-            "Notify",
-        );
+        let result = dbus_client
+            .get_signature(
+                "org.freedesktop.Notifications",
+                "/org/freedesktop/Notifications",
+                "org.freedesktop.Notifications",
+                "Notify",
+            )
+            .unwrap();
 
         assert_eq!(result, Some(String::from("susssasa{sv}i")));
     }

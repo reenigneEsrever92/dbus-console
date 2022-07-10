@@ -2,6 +2,7 @@ use ui::run_ui;
 
 mod app;
 mod dbus;
+mod error;
 mod filter;
 mod ui;
 mod widgets;
