@@ -1,7 +1,7 @@
 use std::{error::Error, ops::Deref};
 
 use crate::{
-    app::{action_to_events, Action, App, Focus},
+    app::{action_to_events, Action, App, Section},
     filter::filter_bus_names,
 };
 use crossterm::{
@@ -15,7 +15,7 @@ use tui::{
     layout::{
         Constraint,
         Direction::{Horizontal, Vertical},
-        Layout,
+        Layout, Rect,
     },
     style::{Modifier, Style},
     widgets::{Block, Borders, Cell, List, ListItem, ListState, Row, Table},
@@ -69,28 +69,45 @@ fn draw_ui<B: Backend>(
 ) -> Result<(), Box<dyn std::error::Error>> {
     terminal.draw(|f| {
         let root_layout = Layout::default()
-            .direction(Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .constraints([Constraint::Percentage(66), Constraint::Percentage(33)].as_ref())
             .split(f.size());
 
-        let left_pane = Layout::default()
+        let left_right_pane = Layout::default()
+            .direction(Horizontal)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
             .split(root_layout[0]);
 
+        let left_pane = Layout::default()
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
+            .split(left_right_pane[0]);
+
         let right_pane = Layout::default()
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-            .split(root_layout[1]);
+            .split(left_right_pane[1]);
 
         f.render_widget(
             draw_bus_names(state),
             left_pane[0],
             // &mut gui_state.bus_name_state,
         );
-        f.render_widget(draw_bus_paths(state), left_pane[1]);
         f.render_widget(draw_methods(state), right_pane[0]);
+        f.render_widget(draw_bus_paths(state), left_pane[1]);
+        f.render_widget(draw_log(state, &root_layout[1]), root_layout[1]);
     })?;
 
     Ok(())
+}
+
+fn draw_log<'a>(state: &'a App, rect: &'a Rect) -> List<'a> {
+    let entries: Vec<ListItem> = state
+        .log
+        .iter()
+        .map(|log_entry| ListItem::new(format!("{:?}", log_entry)))
+        .collect();
+
+    // TODO scroll to bottom
+
+    List::new(entries).block(Block::default().borders(Borders::ALL).title("Log"))
 }
 
 fn draw_bus_names(state: &App) -> List {
@@ -98,11 +115,12 @@ fn draw_bus_names(state: &App) -> List {
 
     let rows: Vec<ListItem> = filter_bus_names(state)
         .into_iter()
-        .skip(state.bus_name_state.skip)
-        .map(|bus_name| {
-            let list_entry = ListItem::new(bus_name.as_str());
-            if let Some(selected_bus) = &state.bus_name_state.selected {
-                if selected_bus == bus_name {
+        .enumerate()
+        .skip(state.bus_name_state.skip as usize)
+        .map(|tuple| {
+            let list_entry = ListItem::new(tuple.1.as_str());
+            if let Some(index) = &state.bus_name_state.selected {
+                if index == &(tuple.0 as u32) {
                     list_entry.style(selected_style)
                 } else {
                     list_entry
@@ -142,12 +160,13 @@ fn draw_bus_paths(state: &App) -> Table {
         let cell = Cell::from(bus_name.as_str());
         let row = Row::new([cell]);
 
-        if let Some(selected_bus) = &state.bus_name_state.selected {
-            if selected_bus == bus_name {
-                row.style(selected_style)
-            } else {
-                row
-            }
+        if let Some(_index) = &state.bus_name_state.selected {
+            // if selected_bus == bus_name {
+            //     row.style(selected_style)
+            // } else {
+            //     row
+            // }
+            row
         } else {
             row
         }
@@ -162,7 +181,7 @@ fn draw_bus_paths(state: &App) -> Table {
 fn wait_for_user_input(app: &App) -> Action {
     match crossterm::event::read() {
         Ok(Event::Key(key)) => match app.focus {
-            Focus::BusFrame => match key.code {
+            Section::BusFrame => match key.code {
                 KeyCode::Enter => todo!(),
                 KeyCode::Right => todo!(),
                 KeyCode::Up => Action::SelectLastBusName,
