@@ -4,6 +4,7 @@ mod app;
 mod dbus;
 mod error;
 mod filter;
+mod tokenizer;
 mod ui;
 mod widgets;
 
