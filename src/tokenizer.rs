@@ -1,16 +1,13 @@
-trait TokenCap<'a> {
-    fn span() -> Span;
-    fn name() -> &'a str;
-    fn content() -> &'a str;
+use regex::Regex;
+
+struct TokenStream<'a, T> {
+    tokens: Vec<Token<'a, T>>,
 }
 
-struct TokenStream<'a> {
-    tokens: Vec<Token<'a>>,
-}
-
-struct Token<'a> {
+struct Token<'a, T> {
     span: Span,
     content: &'a str,
+    token_type: T,
 }
 
 #[derive(Debug, Clone)]
@@ -25,7 +22,7 @@ struct TokenizerError<'a> {
     span: Span,
 }
 
-enum DBusToken {
+enum TokenType {
     Path,         // "org/dbus/introspect"
     Name,         // "org.dbus.introspect"
     FunctionName, // Introspect
@@ -38,16 +35,47 @@ enum DBusToken {
     DictEnd,      // }
 }
 
-fn parse<'a>(s: &'a str) -> Result<TokenStream<'a>, TokenizerError<'a>> {
-    todo!()
+struct Tokenizer {
+    cursor: Cursor,
+    i32_regex: Regex,
+    u32_regex: Regex,
+    string_regex: Regex,
+    group_start_regex: Regex,
+    group_end_regex: Regex,
+    array_start_regex: Regex,
+    array_end_regex: Regex,
+    dict_start_regex: Regex,
+    dict_end_regex: Regex,
+}
+
+struct Cursor {
+    start: u32,
+    end: u32,
+}
+
+impl Tokenizer {
+    fn new() -> Self {
+        Self {
+            cursor: Cursor { start: 0, end: 0 },
+            i32_regex: todo!(),
+            u32_regex: todo!(),
+            string_regex: todo!(),
+            group_start_regex: todo!(),
+            group_end_regex: todo!(),
+            array_start_regex: todo!(),
+            array_end_regex: todo!(),
+            dict_start_regex: todo!(),
+            dict_end_regex: todo!(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use super::parse;
+    use super::Tokenizer;
 
     #[test]
     fn test_path() {
-        let token_stream = parse("org/dbus/introspect").unwrap();
+        let tokenizer = Tokenizer::new();
     }
 }
