@@ -37,8 +37,7 @@ enum TokenType {
 
 struct Tokenizer {
     cursor: Cursor,
-    i32_regex: Regex,
-    u32_regex: Regex,
+    number_regex: Regex,
     string_regex: Regex,
     group_start_regex: Regex,
     group_end_regex: Regex,
@@ -57,9 +56,8 @@ impl Tokenizer {
     fn new() -> Self {
         Self {
             cursor: Cursor { start: 0, end: 0 },
-            i32_regex: todo!(),
-            u32_regex: todo!(),
-            string_regex: todo!(),
+            number_regex: Regex::new(r"^-?[0-9]+(\.[0-9]+)?$"),
+            string_regex: Regex::new(r"'.+'"),
             group_start_regex: todo!(),
             group_end_regex: todo!(),
             array_start_regex: todo!(),
