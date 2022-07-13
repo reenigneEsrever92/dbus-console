@@ -23,7 +23,7 @@ impl<'a, T> TokenStream<'a, T> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq)]
 struct Token<'a, T> {
     span: Span,
     content: &'a str,
@@ -40,7 +40,7 @@ impl<'a> Cursor<'a> {
     fn new(subject: &'a str) -> Self {
         Self {
             start: 0,
-            end: 1,
+            end: 0,
             subject,
         }
     }
@@ -50,11 +50,27 @@ impl<'a> Cursor<'a> {
     }
 
     fn inc_end(&mut self) {
-        self.end += 1;
+        self.end = if self.end < self.subject.len() {
+            self.end + 1
+        } else {
+            self.end
+        };
     }
 
-    fn inc_start(&mut self) {
-        self.start += 1;
+    fn next(&mut self) {
+        self.start = self.end;
+    }
+
+    fn peek(&self) -> Option<&str> {
+        if self.end < self.subject.len() {
+            Some(&self.subject[self.start..self.end + 1])
+        } else {
+            None
+        }
+    }
+
+    fn can_increment(&self) -> bool {
+        self.end < self.subject.len()
     }
 
     fn empty(&self) -> bool {
@@ -62,7 +78,7 @@ impl<'a> Cursor<'a> {
     }
 }
 
-#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Default, Debug, PartialEq, Eq, Clone)]
 struct Span {
     start: usize,
     end: usize,
@@ -87,18 +103,16 @@ struct TokenizerError<'a> {
     span: Span,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum TokenType {
-    Path,         // "org/dbus/introspect"
-    Name,         // "org.dbus.introspect"
-    FunctionName, // Introspect
-    Literal,      // 4u32, "String",
-    GroupStart,   // (
-    GroupEnd,     // )
-    SetStart,     // [
-    SetEnd,       // ]
-    DictStart,    // {
-    DictEnd,      // }
+    Number,      // Introspect
+    String,      // 4u32, "String",
+    StructStart, // (
+    StructEnd,   // )
+    ArrayStart,  // [
+    ArrayEnd,    // ]
+    DictStart,   // {
+    DictEnd,     // }
 }
 
 struct Tokenizer {
@@ -117,29 +131,32 @@ impl Tokenizer {
     fn new() -> Self {
         Self {
             number_regex: Regex::new(r"^-?[0-9]+(\.[0-9]+)?$").unwrap(),
-            string_regex: Regex::new(r"'.+'").unwrap(),
-            struct_start_regex: Regex::new(r"\(").unwrap(),
-            struct_end_regex: Regex::new(r"\)").unwrap(),
-            array_start_regex: Regex::new(r"\]").unwrap(),
-            array_end_regex: Regex::new(r"\[").unwrap(),
-            dict_start_regex: Regex::new(r"\{").unwrap(),
-            dict_end_regex: Regex::new(r"\}").unwrap(),
-            seperator: Regex::new(r",[ ]*").unwrap(),
+            string_regex: Regex::new(r"^'.+'$").unwrap(),
+            struct_start_regex: Regex::new(r"^\($").unwrap(),
+            struct_end_regex: Regex::new(r"^\)$").unwrap(),
+            array_start_regex: Regex::new(r"^\]$").unwrap(),
+            array_end_regex: Regex::new(r"^\[$").unwrap(),
+            dict_start_regex: Regex::new(r"^\{$").unwrap(),
+            dict_end_regex: Regex::new(r"^\}$").unwrap(),
+            seperator: Regex::new(r"^,[ ]*$").unwrap(),
         }
     }
 
     fn tokenize<'a>(&self, sub: &'a str) -> Result<TokenStream<'a, TokenType>, TokenizerError> {
-        let cursor = Cursor::new(sub);
+        let mut cursor = Cursor::new(sub);
         let mut token_stream = TokenStream::default();
 
-        while !cursor.empty() {
-            let mut last_token = None;
-            match self.match_token(cursor.slice()) {
-                Some(token) => last_token = Some(token),
-                None => {
-                    if let Some(token) = last_token {
+        while let Some(slice) = cursor.peek() {
+            match self.match_token(slice) {
+                Some(token) => {
+                    cursor.inc_end();
+                    if cursor.empty() {
                         token_stream.push((&cursor, token).into())
                     }
+                }
+                None => {
+                    token_stream.push((&cursor, self.match_token(cursor.slice()).unwrap()).into());
+                    cursor.next();
                 }
             }
         }
@@ -148,7 +165,25 @@ impl Tokenizer {
     }
 
     fn match_token(&self, slice: &str) -> Option<TokenType> {
-        todo!()
+        if self.struct_start_regex.is_match(slice) {
+            Some(TokenType::StructStart)
+        } else if self.struct_end_regex.is_match(slice) {
+            Some(TokenType::StructEnd)
+        } else if self.dict_start_regex.is_match(slice) {
+            Some(TokenType::DictStart)
+        } else if self.dict_end_regex.is_match(slice) {
+            Some(TokenType::DictEnd)
+        } else if self.array_start_regex.is_match(slice) {
+            Some(TokenType::ArrayStart)
+        } else if self.array_end_regex.is_match(slice) {
+            Some(TokenType::ArrayEnd)
+        } else if self.string_regex.is_match(slice) {
+            Some(TokenType::String)
+        } else if self.number_regex.is_match(slice) {
+            Some(TokenType::Number)
+        } else {
+            None
+        }
     }
 }
 
@@ -166,12 +201,12 @@ mod test {
                 Token {
                     span: super::Span { start: 0, end: 1 },
                     content: "(",
-                    token_type: TokenType::GroupStart
+                    token_type: TokenType::StructStart
                 },
                 Token {
                     span: super::Span { start: 1, end: 2 },
                     content: ")",
-                    token_type: TokenType::GroupEnd
+                    token_type: TokenType::StructEnd
                 }
             ]),
             token_stream.unwrap()
