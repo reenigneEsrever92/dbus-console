@@ -107,7 +107,9 @@ fn draw_log<'a>(state: &'a App, rect: &'a Rect) -> List<'a> {
 
     // TODO scroll to bottom
 
-    List::new(entries).block(Block::default().borders(Borders::ALL).title("Log"))
+    List::new(entries)
+        .start_corner(tui::layout::Corner::BottomLeft)
+        .block(Block::default().borders(Borders::ALL).title("Log"))
 }
 
 fn draw_bus_names(state: &App) -> List {
