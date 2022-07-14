@@ -40,46 +40,28 @@ impl<'a> Cursor<'a> {
     fn new(subject: &'a str) -> Self {
         Self {
             start: 0,
-            end: 1,
+            end: subject.len(),
             subject,
         }
     }
 
     fn slice(&self) -> Option<&'a str> {
-        if self.end < self.subject.len() {
+        if self.start < self.end {
             Some(&self.subject[self.start..self.end])
         } else {
             None
         }
     }
 
-    fn inc_end(&mut self) {
-        self.end = if self.end < self.subject.len() {
-            self.end + 1
-        } else {
-            self.end
-        };
+    fn step(&mut self) {
+        if self.start < self.end {
+            self.end -= 1;
+        }
     }
 
     fn next(&mut self) {
         self.start = self.end;
-        self.end += 1;
-    }
-
-    fn peek(&self) -> Option<&str> {
-        if self.end < self.subject.len() {
-            Some(&self.subject[self.start..self.end + 1])
-        } else {
-            None
-        }
-    }
-
-    fn can_increment(&self) -> bool {
-        self.end < self.subject.len()
-    }
-
-    fn empty(&self) -> bool {
-        self.end >= self.subject.len()
+        self.end = self.subject.len();
     }
 }
 
@@ -140,12 +122,12 @@ struct Tokenizer {
 impl Tokenizer {
     fn new() -> Self {
         Self {
-            number_regex: Regex::new(r"^?-[0-9]+?(\.[0-9]+)$").unwrap(),
-            string_regex: Regex::new(r#"^(".*")|('.*')$"#).unwrap(),
+            number_regex: Regex::new(r"^-?[0-9]+(\.[0-9]+)?$").unwrap(),
+            string_regex: Regex::new(r#"^(("[a-zA-Z0-9_\.]*")|('[a-zA-Z0-9_\.]*'))$"#).unwrap(),
             struct_start_regex: Regex::new(r"^\($").unwrap(),
             struct_end_regex: Regex::new(r"^\)$").unwrap(),
-            array_start_regex: Regex::new(r"^\]$").unwrap(),
-            array_end_regex: Regex::new(r"^\[$").unwrap(),
+            array_start_regex: Regex::new(r"^\[$").unwrap(),
+            array_end_regex: Regex::new(r"^\]$").unwrap(),
             dict_start_regex: Regex::new(r"^\{$").unwrap(),
             dict_end_regex: Regex::new(r"^\}$").unwrap(),
             seperator_regex: Regex::new(r"^,$").unwrap(),
@@ -155,7 +137,7 @@ impl Tokenizer {
     }
 
     fn tokenize<'a>(&self, sub: &'a str) -> Result<TokenStream<'a, TokenType>, TokenizerError> {
-        // TDOD rework
+        // TODO rework
 
         let mut cursor = Cursor::new(sub);
         let mut token_stream = TokenStream::default();
@@ -166,7 +148,7 @@ impl Tokenizer {
                     token_stream.push((&cursor, token).into());
                     cursor.next();
                 }
-                None => cursor.inc_end(),
+                None => cursor.step(),
             }
         }
 
@@ -232,9 +214,10 @@ mod test {
     fn test_complex_structure() {
         let tokenizer = Tokenizer::new();
         let token_stream =
-            tokenizer.tokenize("(\"test\", -3.1, { \"key\": \"value\" }, [1, 2, 3])");
+            tokenizer.tokenize("(\"test\", -3.1, { \"key\": \"value\" }, [ 1, 2, 3 ])");
 
         assert_eq!(
+            token_stream.unwrap(),
             TokenStream::new(vec![
                 Token {
                     span: super::Span { start: 0, end: 1 },
@@ -247,17 +230,17 @@ mod test {
                     token_type: TokenType::String
                 },
                 Token {
-                    span: super::Span { start: 8, end: 9 },
+                    span: super::Span { start: 7, end: 8 },
                     content: ",",
                     token_type: TokenType::Seperator
                 },
                 Token {
-                    span: super::Span { start: 9, end: 10 },
+                    span: super::Span { start: 8, end: 9 },
                     content: " ",
                     token_type: TokenType::Whitespace
                 },
                 Token {
-                    span: super::Span { start: 10, end: 13 },
+                    span: super::Span { start: 9, end: 13 },
                     content: "-3.1",
                     token_type: TokenType::Number
                 },
@@ -282,72 +265,106 @@ mod test {
                     token_type: TokenType::Whitespace
                 },
                 Token {
-                    span: super::Span { start: 17, end: 21 },
+                    span: super::Span { start: 17, end: 22 },
                     content: "\"key\"",
                     token_type: TokenType::String
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
-                    content: ", ",
-                    token_type: TokenType::Seperator
+                    span: super::Span { start: 22, end: 23 },
+                    content: ":",
+                    token_type: TokenType::DictAssignmentOperator
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
+                    span: super::Span { start: 23, end: 24 },
+                    content: " ",
+                    token_type: TokenType::Whitespace
+                },
+                Token {
+                    span: super::Span { start: 24, end: 31 },
                     content: "\"value\"",
                     token_type: TokenType::String
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
+                    span: super::Span { start: 31, end: 32 },
+                    content: " ",
+                    token_type: TokenType::Whitespace
+                },
+                Token {
+                    span: super::Span { start: 32, end: 33 },
                     content: "}",
                     token_type: TokenType::DictEnd
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
-                    content: ", ",
+                    span: super::Span { start: 33, end: 34 },
+                    content: ",",
                     token_type: TokenType::Seperator
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
+                    span: super::Span { start: 34, end: 35 },
+                    content: " ",
+                    token_type: TokenType::Whitespace
+                },
+                Token {
+                    span: super::Span { start: 35, end: 36 },
                     content: "[",
                     token_type: TokenType::ArrayStart
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
-                    content: "1",
-                    token_type: TokenType::String
+                    span: super::Span { start: 36, end: 37 },
+                    content: " ",
+                    token_type: TokenType::Whitespace
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
-                    content: ", ",
+                    span: super::Span { start: 37, end: 38 },
+                    content: "1",
+                    token_type: TokenType::Number
+                },
+                Token {
+                    span: super::Span { start: 38, end: 39 },
+                    content: ",",
                     token_type: TokenType::Seperator
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
+                    span: super::Span { start: 39, end: 40 },
+                    content: " ",
+                    token_type: TokenType::Whitespace
+                },
+                Token {
+                    span: super::Span { start: 40, end: 41 },
                     content: "2",
                     token_type: TokenType::Number
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
-                    content: ", ",
+                    span: super::Span { start: 41, end: 42 },
+                    content: ",",
                     token_type: TokenType::Seperator
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
+                    span: super::Span { start: 42, end: 43 },
+                    content: " ",
+                    token_type: TokenType::Whitespace
+                },
+                Token {
+                    span: super::Span { start: 43, end: 44 },
                     content: "3",
                     token_type: TokenType::Number
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
+                    span: super::Span { start: 44, end: 45 },
+                    content: " ",
+                    token_type: TokenType::Whitespace
+                },
+                Token {
+                    span: super::Span { start: 45, end: 46 },
                     content: "]",
                     token_type: TokenType::ArrayEnd
                 },
                 Token {
-                    span: super::Span { start: 0, end: 1 },
+                    span: super::Span { start: 46, end: 47 },
                     content: ")",
                     token_type: TokenType::StructEnd
                 },
             ]),
-            token_stream.unwrap()
         );
     }
 }
