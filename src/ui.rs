@@ -3,6 +3,7 @@ use std::{error::Error, ops::Deref};
 use crate::{
     app::{action_to_events, Action, App, Section},
     filter::filter_bus_names,
+    widgets::{ConsoleList, ConsoleListItem},
 };
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
@@ -98,18 +99,18 @@ fn draw_ui<B: Backend>(
     Ok(())
 }
 
-fn draw_log<'a>(state: &'a App, rect: &'a Rect) -> List<'a> {
-    let entries: Vec<ListItem> = state
+fn draw_log<'a>(state: &'a App, rect: &'a Rect) -> ConsoleList<'a> {
+    let entries: Vec<ConsoleListItem> = state
         .log
         .iter()
-        .map(|log_entry| ListItem::new(format!("{:?}", log_entry)))
+        .map(|log_entry| ConsoleListItem::new(format!("{:?}", log_entry)))
         .collect();
 
     // TODO scroll to bottom
-
-    List::new(entries)
-        .start_corner(tui::layout::Corner::BottomLeft)
-        .block(Block::default().borders(Borders::ALL).title("Log"))
+    ConsoleList::new(entries).block(Block::default().borders(Borders::ALL).title("Log"))
+    // List::new(entries)
+    //     .start_corner(tui::layout::Corner::BottomLeft)
+    //     .block(Block::default().borders(Borders::ALL).title("Log"))
 }
 
 fn draw_bus_names(state: &App) -> List {
