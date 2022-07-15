@@ -3,12 +3,12 @@ use std::usize;
 use crate::{dbus::DBusClient, error::DBusConsoleError, filter::filter_bus_names};
 
 pub struct App {
-    pub bus_name_state: ListState,
+    pub bus_name_state: ListState<String>,
     pub paths: Vec<String>,
     pub methods: Vec<String>,
     pub filter_aliases: bool,
     pub focus: Section,
-    pub log: Vec<LogEntry>,
+    pub log: ListState<LogEntry>,
 }
 
 #[derive(Debug)]
@@ -17,12 +17,22 @@ pub enum LogEntry {
     AppEventEntry(AppEvent),
 }
 
-#[derive(Default)]
-pub struct ListState {
-    pub entries: Vec<String>,
+pub struct ListState<T> {
+    pub entries: Vec<T>,
     pub selected: Option<u32>,
     pub skip: u32,
     pub visible_lines: u32,
+}
+
+impl<T> Default for ListState<T> {
+    fn default() -> Self {
+        Self {
+            entries: Default::default(),
+            selected: Default::default(),
+            skip: Default::default(),
+            visible_lines: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -60,7 +70,7 @@ impl Default for App {
             paths: Default::default(),
             filter_aliases: true,
             bus_name_state: ListState::default(),
-            log: Vec::new(),
+            log: ListState::default(),
         }
     }
 }
@@ -77,7 +87,7 @@ impl App {
         match reduce_event(self, action_to_events(action)) {
             Action::None => {}
             a => {
-                self.log.push(LogEntry::ActionEntry(a.to_owned()));
+                self.log.entries.push(LogEntry::ActionEntry(a.to_owned()));
                 self.reduce(a)
             }
         }
@@ -88,9 +98,10 @@ pub fn action_to_events(a: Action) -> AppEvent {
     match a {
         Action::LoadBusNames => AppEvent::BusNamesLoaded(DBusClient::default().list_names()),
         Action::Quit => todo!(),
-        Action::LoadPaths { bus_name } => {
-            AppEvent::PathsLoaded(DBusClient::default().get_paths(&bus_name).unwrap())
-        }
+        Action::LoadPaths { bus_name } => match DBusClient::default().get_paths(&bus_name) {
+            Ok(paths) => AppEvent::PathsLoaded(paths),
+            Err(e) => AppEvent::Error(e),
+        },
         Action::SelectLastBusName => AppEvent::SelectPreviousBusName,
         Action::SelectNextBusName => AppEvent::SelectNextBusName,
         Action::None => AppEvent::None,
@@ -99,7 +110,7 @@ pub fn action_to_events(a: Action) -> AppEvent {
 }
 
 fn reduce_event(app: &mut App, e: AppEvent) -> Action {
-    app.log.push(LogEntry::AppEventEntry(e.to_owned()));
+    app.log.entries.push(LogEntry::AppEventEntry(e.to_owned()));
     match e {
         AppEvent::BusNamesLoaded(bus_names) => {
             app.bus_name_state.entries = bus_names;

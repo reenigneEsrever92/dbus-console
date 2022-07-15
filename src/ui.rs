@@ -102,15 +102,20 @@ fn draw_ui<B: Backend>(
 fn draw_log<'a>(state: &'a App, rect: &'a Rect) -> ConsoleList<'a> {
     let entries: Vec<ConsoleListItem> = state
         .log
+        .entries
         .iter()
         .map(|log_entry| ConsoleListItem::new(format!("{:?}", log_entry)))
         .collect();
 
-    // TODO scroll to bottom
-    ConsoleList::new(entries).block(Block::default().borders(Borders::ALL).title("Log"))
-    // List::new(entries)
-    //     .start_corner(tui::layout::Corner::BottomLeft)
-    //     .block(Block::default().borders(Borders::ALL).title("Log"))
+    let offset = if state.log.entries.len() > rect.height as usize {
+        state.log.entries.len() as u16 - rect.height
+    } else {
+        0
+    };
+
+    ConsoleList::new(entries)
+        .offset(offset as usize)
+        .block(Block::default().borders(Borders::ALL).title("Log"))
 }
 
 fn draw_bus_names(state: &App) -> List {

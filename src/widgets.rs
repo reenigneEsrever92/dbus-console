@@ -30,6 +30,7 @@ pub struct ConsoleList<'a> {
     block: Option<Block<'a>>,
     items: Vec<ConsoleListItem<'a>>,
     selected_style: Option<Style>,
+    offset: usize,
 }
 
 impl<'a> ConsoleList<'a> {
@@ -38,11 +39,17 @@ impl<'a> ConsoleList<'a> {
             block: None,
             items,
             selected_style: None,
+            offset: 0,
         }
     }
 
     pub fn block(mut self, block: Block<'a>) -> Self {
         self.block = Some(block);
+        self
+    }
+
+    pub fn offset(mut self, offset: usize) -> Self {
+        self.offset = offset;
         self
     }
 
@@ -62,22 +69,20 @@ impl<'a> ConsoleList<'a> {
             return;
         }
 
-        self.items.iter().enumerate().for_each(|(pos, item)| {
-            if (list_area.y + pos as u16) < (list_area.y + list_area.height) {
-                buf.set_span(
-                    list_area.x,
-                    list_area.y + pos as u16,
-                    &item.content,
-                    list_area.width,
-                );
-            }
-        });
-        // buf.set_span(
-        //     list_area.x,
-        //     list_area.y,
-        //     &Span::raw("test"),
-        //     list_area.width,
-        // );
+        self.items
+            .iter()
+            .skip(self.offset)
+            .enumerate()
+            .for_each(|(pos, item)| {
+                if (list_area.y + pos as u16) < (list_area.y + list_area.height) {
+                    buf.set_span(
+                        list_area.x,
+                        list_area.y + pos as u16,
+                        &item.content,
+                        list_area.width,
+                    );
+                }
+            });
     }
 
     fn calc_skip(&self) -> i32 {

@@ -54,16 +54,32 @@ impl DBusClient {
     }
 
     fn do_get_paths(&self, service: &str, path: &str) -> DBusConsoleResult<Vec<String>> {
-        Ok(self
-            .introspect(service, path)?
-            .nodes()
-            .iter()
-            .map(|node| {
+        self.introspect(service, path)?.nodes().iter_mut().fold(
+            Ok(Vec::new()),
+            |mut paths, node| {
                 let mut full_name = String::from(path);
+
+                if !full_name.ends_with("/") {
+                    full_name.push('/')
+                }
+
                 full_name.push_str(node.name().unwrap());
-                full_name
-            })
-            .collect())
+
+                match paths {
+                    Ok(mut vec) => {
+                        vec.push(full_name.clone());
+                        match self.do_get_paths(service, &full_name) {
+                            Ok(mut rec_paths) => {
+                                vec.append(&mut rec_paths);
+                                Ok(vec)
+                            }
+                            Err(e) => Err(e),
+                        }
+                    }
+                    Err(e) => Err(e),
+                }
+            },
+        )
     }
 
     pub fn get_methods(&self, service: &str, path: &str) -> DBusConsoleResult<Vec<String>> {
