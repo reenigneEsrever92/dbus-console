@@ -190,10 +190,8 @@ fn wait_for_user_input(app: &App) -> Action {
     match crossterm::event::read() {
         Ok(Event::Key(key)) => match app.focus {
             Section::BusFrame => match key.code {
-                KeyCode::Enter => todo!(),
-                KeyCode::Right => todo!(),
-                KeyCode::Up => Action::SelectLastBusName,
-                KeyCode::Down => Action::SelectNextBusName,
+                KeyCode::Up | KeyCode::Char('k') => Action::SelectLastBusName,
+                KeyCode::Down | KeyCode::Char('j') => Action::SelectNextBusName,
                 KeyCode::Char('q') => Action::Quit,
                 _ => Action::None,
             },
