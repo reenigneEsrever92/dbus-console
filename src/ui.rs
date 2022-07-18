@@ -107,8 +107,10 @@ fn draw_log<'a>(state: &'a App, rect: &'a Rect) -> ConsoleList<'a> {
         .map(|log_entry| ConsoleListItem::new(format!("{:?}", log_entry)))
         .collect();
 
-    let offset = if state.log.entries.len() > rect.height as usize {
-        state.log.entries.len() as u16 - rect.height
+    let height = rect.height - 2; // TODO magic 2 is because borders occupy one line each
+
+    let offset = if state.log.entries.len() > height as usize {
+        state.log.entries.len() as u16 - height
     } else {
         0
     };
