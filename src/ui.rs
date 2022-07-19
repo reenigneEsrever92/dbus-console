@@ -1,7 +1,7 @@
 use std::{error::Error, ops::Deref};
 
 use crate::{
-    app::{action_to_events, Action, App, Section},
+    app::{Action, App, Section},
     filter::filter_bus_names,
     widgets::{ConsoleList, ConsoleListItem},
 };
@@ -194,6 +194,14 @@ fn wait_for_user_input(app: &App) -> Action {
             Section::BusFrame => match key.code {
                 KeyCode::Up | KeyCode::Char('k') => Action::SelectLastBusName,
                 KeyCode::Down | KeyCode::Char('j') => Action::SelectNextBusName,
+                KeyCode::Char('p') => Action::FocusPaths,
+                KeyCode::Char('q') => Action::Quit,
+                _ => Action::None,
+            },
+            Section::BusPath => match key.code {
+                KeyCode::Up | KeyCode::Char('k') => Action::SelectLastBusName,
+                KeyCode::Down | KeyCode::Char('j') => Action::SelectLastBusName,
+                KeyCode::Char('b') => Action::FocusBusNames,
                 KeyCode::Char('q') => Action::Quit,
                 _ => Action::None,
             },

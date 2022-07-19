@@ -38,12 +38,15 @@ impl<T> Default for ListState<T> {
 #[derive(Debug, Clone)]
 pub enum Section {
     BusFrame,
+    BusPath,
 }
 
 #[derive(Debug, Clone)]
 pub enum Action {
     None,
     Quit,
+    FocusBusNames,
+    FocusPaths,
     LoadBusNames,
     LoadPaths { bus_name: String },
     Resize { section: Section, rows: i32 },
@@ -60,6 +63,8 @@ pub enum AppEvent {
     MethodsLoaded(Vec<String>),
     SelectNextBusName,
     SelectPreviousBusName,
+    FocusBusNames,
+    FocusPaths,
 }
 
 impl Default for App {
@@ -106,6 +111,8 @@ pub fn action_to_events(a: Action) -> AppEvent {
         Action::SelectNextBusName => AppEvent::SelectNextBusName,
         Action::None => AppEvent::None,
         Action::Resize { section, rows } => todo!(),
+        Action::FocusBusNames => AppEvent::FocusBusNames,
+        Action::FocusPaths => AppEvent::FocusPaths,
     }
 }
 
@@ -128,6 +135,14 @@ fn reduce_event(app: &mut App, e: AppEvent) -> Action {
         AppEvent::SelectNextBusName => select_next_bus_name(app),
         AppEvent::SelectPreviousBusName => select_last_bus_name(app),
         AppEvent::Error(_) => Action::None,
+        AppEvent::FocusBusNames => {
+            app.focus = Section::BusFrame;
+            Action::None
+        },
+        AppEvent::FocusPaths => {
+            app.focus = Section::BusPath;
+            Action::None
+        },
     }
 }
 
